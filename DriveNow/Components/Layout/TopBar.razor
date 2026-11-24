@@ -9,7 +9,7 @@
     </div>
 
     <div class="d-flex align-items-center gap-2 ms-auto">
-        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="Theme.ToggleAsync"
+        <button class="btn btn-outline-secondary theme-toggle-fixed" type="button" @onclick="Theme.ToggleAsync"
                 title="@(Theme.IsDark ? "Switch to light mode" : "Switch to dark mode")"
                 aria-label="Toggle dark mode">
             <i class="bi @(Theme.IsDark ? "bi-sun" : "bi-moon-stars")"></i>
