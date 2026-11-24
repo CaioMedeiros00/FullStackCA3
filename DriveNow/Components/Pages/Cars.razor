@@ -1,0 +1,455 @@
+@page "/cars"
+@attribute [Authorize]
+@inject CarService CarService
+@inject BookingService BookingService
+@inject AppState AppState
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Cars | DriveNow</PageTitle>
+
+<PageHeader Title="Cars" Icon="bi-car-front" Subtitle="Manage the rental fleet">
+    <button class="btn btn-outline-secondary" @onclick="ExportCsvAsync" disabled="@(isLoading || cars.Count == 0)">
+        <i class="bi bi-download me-1"></i>Export CSV
+    </button>
+    <button class="btn btn-primary" @onclick="OpenAddForm" disabled="@isLoading">
+        <i class="bi bi-plus-lg me-1"></i>Add Car
+    </button>
+</PageHeader>
+
+<AppAlert Type="AlertType.Danger" Message="@pageError" Dismissible="true" OnDismiss="() => pageError = null" />
+
+@if (bookingsWarning is not null)
+{
+    <AppAlert Type="AlertType.Warning" Message="@bookingsWarning" Dismissible="true" OnDismiss="() => bookingsWarning = null" />
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body border-bottom">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <SearchBox Value="@AppState.CarSearchTerm" ValueChanged="OnSearchChanged"
+                           Placeholder="Search by registration, make or model..." />
+            </div>
+            <div class="col-sm-6 col-md-3">
+                <select class="form-select" value="@AppState.CarFuelFilter" @onchange="OnFuelFilterChanged" aria-label="Filter by fuel type">
+                    <option value="">All fuel types</option>
+                    @foreach (var fuel in CarForm.FuelTypes)
+                    {
+                        <option value="@fuel">@fuel</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-4">
+                <div class="d-flex align-items-center justify-content-md-end gap-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="availableOnly"
+                               checked="@AppState.ShowAvailableCarsOnly" @onchange="OnAvailableOnlyChanged" />
+                        <label class="form-check-label" for="availableOnly">Available only</label>
+                    </div>
+                    @if (HasActiveFilters)
+                    {
+                        <button class="btn btn-sm btn-link" @onclick="ClearFilters">Clear filters</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <LoadingSpinner Message="Loading cars..." />
+    }
+    else if (loadFailed)
+    {
+        <EmptyState Icon="bi-cloud-slash" Title="Cars could not be loaded" Message="@loadError">
+            <button class="btn btn-primary" @onclick="LoadAsync"><i class="bi bi-arrow-repeat me-1"></i>Try again</button>
+        </EmptyState>
+    }
+    else if (cars.Count == 0)
+    {
+        <EmptyState Icon="bi-car-front" Title="No cars yet" Message="Add your first vehicle to start taking bookings.">
+            <button class="btn btn-primary" @onclick="OpenAddForm"><i class="bi bi-plus-lg me-1"></i>Add Car</button>
+        </EmptyState>
+    }
+    else if (FilteredCars.Count == 0)
+    {
+        <EmptyState Icon="bi-search" Title="No matching cars" Message="Try a different search term or clear the filters.">
+            <button class="btn btn-outline-primary" @onclick="ClearFilters">Clear filters</button>
+        </EmptyState>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>@SortHeader("Registration", nameof(Car.RegistrationNumber))</th>
+                        <th>@SortHeader("Car", nameof(Car.Make))</th>
+                        <th class="d-none d-md-table-cell">@SortHeader("Year", nameof(Car.Year))</th>
+                        <th class="d-none d-sm-table-cell">Fuel</th>
+                        <th class="text-end">@SortHeader("Daily Rate", nameof(Car.DailyRate))</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var car in PagedCars)
+                    {
+                        var activeBooking = ActiveBookingFor(car.Id);
+                        <tr @key="car.Id">
+                            <td class="fw-semibold font-monospace">@car.RegistrationNumber</td>
+                            <td>
+                                <div class="fw-semibold">@car.Make @car.Model</div>
+                                <div class="small text-body-secondary d-md-none">@car.Year · @car.FuelType</div>
+                            </td>
+                            <td class="d-none d-md-table-cell">@car.Year</td>
+                            <td class="d-none d-sm-table-cell">
+                                <i class="bi @FuelIcon(car.FuelType) me-1"></i>@car.FuelType
+                            </td>
+                            <td class="text-end">@car.DailyRate.ToString("C", Euro)</td>
+                            <td>
+                                @if (activeBooking is not null)
+                                {
+                                    <StatusBadge Text="Booked" Color="warning" Icon="bi-calendar-check" />
+                                    <div class="small text-body-secondary">until @activeBooking.EndDate.ToString("dd MMM")</div>
+                                }
+                                else if (car.Available)
+                                {
+                                    <StatusBadge Text="Available" Color="success" Icon="bi-check-circle" />
+                                }
+                                else
+                                {
+                                    <StatusBadge Text="Unavailable" Color="secondary" Icon="bi-slash-circle" />
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <button class="btn btn-sm btn-outline-primary" title="Edit" aria-label="Edit @car.DisplayName"
+                                        @onclick="() => OpenEditForm(car)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                @* Authorization check: only administrators can delete cars. *@
+                                <AuthorizeView Roles="@AuthService.AdminRole">
+                                    <button class="btn btn-sm btn-outline-danger ms-1" title="Delete" aria-label="Delete @car.DisplayName"
+                                            @onclick="() => AskDelete(car)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer bg-transparent">
+            <Pagination CurrentPage="currentPage" PageSize="PageSize" TotalItems="FilteredCars.Count"
+                        OnPageChanged="page => currentPage = page" />
+            @if (FilteredCars.Count <= PageSize)
+            {
+                <span class="small text-body-secondary">Showing @FilteredCars.Count of @cars.Count cars</span>
+            }
+        </div>
+    }
+</div>
+
+<AppModal IsVisible="showForm" Title="@(editingCar?.Id > 0 ? "Edit Car" : "Add Car")" Icon="bi-car-front"
+          SizeClass="modal-lg" CloseDisabled="isSaving" OnClose="CloseForm">
+    @if (editingCar is not null)
+    {
+        <CarForm Model="editingCar" IsEdit="editingCar.Id > 0" IsSaving="isSaving" ServerError="@formError"
+                 HasActiveBooking="ActiveBookingFor(editingCar.Id) is not null"
+                 OnValidSubmit="SaveCarAsync" OnCancel="CloseForm" />
+    }
+</AppModal>
+
+<ConfirmDeleteModal IsVisible="carToDelete is not null" Title="Delete Car"
+                    Message="Are you sure you want to delete this car?"
+                    ItemName="@carToDelete?.DisplayName" IsProcessing="isDeleting"
+                    OnConfirm="DeleteCarAsync" OnCancel="() => carToDelete = null" />
+
+@code {
+    private const int PageSize = 8;
+    private static readonly System.Globalization.CultureInfo Euro = new("en-IE");
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private List<Car> cars = [];
+    private List<Booking> bookings = [];
+    private bool isLoading = true;
+    private bool loadFailed;
+    private string? loadError;
+    private string? pageError;
+    private string? bookingsWarning;
+
+    private int currentPage = 1;
+    private string sortColumn = nameof(Car.Make);
+    private bool sortAscending = true;
+
+    private bool showForm;
+    private bool isSaving;
+    private string? formError;
+    private Car? editingCar;
+
+    private Car? carToDelete;
+    private bool isDeleting;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        loadFailed = false;
+
+        var carsTask = CarService.GetCarsAsync();
+        var bookingsTask = BookingService.GetBookingsAsync();
+        await Task.WhenAll(carsTask, bookingsTask);
+
+        var carsResult = await carsTask;
+        var bookingsResult = await bookingsTask;
+
+        if (carsResult.Success)
+        {
+            cars = carsResult.Data ?? [];
+        }
+        else
+        {
+            loadFailed = true;
+            loadError = carsResult.ErrorMessage;
+        }
+
+        if (bookingsResult.Success)
+        {
+            bookings = bookingsResult.Data ?? [];
+            bookingsWarning = null;
+            AppState.SetActiveBookingCount(bookings.Count(b => BookingRules.IsActive(b, DateTime.Now)));
+        }
+        else
+        {
+            bookings = [];
+            bookingsWarning = "Booking information is unavailable, so booking status may not be shown. " + bookingsResult.ErrorMessage;
+        }
+
+        isLoading = false;
+    }
+
+    // ------------------------------------------------------------ Filtering
+
+    private List<Car> FilteredCars
+    {
+        get
+        {
+            IEnumerable<Car> query = cars;
+            var term = AppState.CarSearchTerm.Trim();
+            if (term.Length > 0)
+            {
+                query = query.Where(c =>
+                    c.RegistrationNumber.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    c.Make.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    c.Model.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    $"{c.Make} {c.Model}".Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrEmpty(AppState.CarFuelFilter))
+            {
+                query = query.Where(c => string.Equals(c.FuelType, AppState.CarFuelFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            if (AppState.ShowAvailableCarsOnly)
+            {
+                query = query.Where(c => c.Available && ActiveBookingFor(c.Id) is null);
+            }
+
+            query = sortColumn switch
+            {
+                nameof(Car.RegistrationNumber) => Order(query, c => c.RegistrationNumber),
+                nameof(Car.Year) => Order(query, c => c.Year),
+                nameof(Car.DailyRate) => Order(query, c => c.DailyRate),
+                _ => Order(query, c => c.Make + " " + c.Model)
+            };
+            return query.ToList();
+        }
+    }
+
+    private IEnumerable<Car> PagedCars => FilteredCars.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    private IEnumerable<Car> Order<TKey>(IEnumerable<Car> query, Func<Car, TKey> key) =>
+        sortAscending ? query.OrderBy(key) : query.OrderByDescending(key);
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(AppState.CarSearchTerm) || AppState.ShowAvailableCarsOnly || !string.IsNullOrEmpty(AppState.CarFuelFilter);
+
+    private void OnSearchChanged(string value)
+    {
+        AppState.CarSearchTerm = value;
+        currentPage = 1;
+    }
+
+    private void OnFuelFilterChanged(ChangeEventArgs e)
+    {
+        AppState.CarFuelFilter = e.Value?.ToString() ?? string.Empty;
+        currentPage = 1;
+    }
+
+    private void OnAvailableOnlyChanged(ChangeEventArgs e)
+    {
+        AppState.ShowAvailableCarsOnly = e.Value is true;
+        currentPage = 1;
+    }
+
+    private void ClearFilters()
+    {
+        AppState.CarSearchTerm = string.Empty;
+        AppState.CarFuelFilter = string.Empty;
+        AppState.ShowAvailableCarsOnly = false;
+        currentPage = 1;
+    }
+
+    private void SortBy(string column)
+    {
+        sortAscending = sortColumn != column || !sortAscending;
+        sortColumn = column;
+    }
+
+    private RenderFragment SortHeader(string label, string column) => @<button type="button" class="btn btn-link p-0 text-reset fw-semibold text-decoration-none" @onclick="() => SortBy(column)">
+        @label
+        @if (sortColumn == column)
+        {
+            <i class="bi @(sortAscending ? "bi-caret-up-fill" : "bi-caret-down-fill") small"></i>
+        }
+    </button>;
+
+    private Booking? ActiveBookingFor(int carId) =>
+        bookings.FirstOrDefault(b => b.CarId == carId && BookingRules.IsActive(b, DateTime.Now));
+
+    private static string FuelIcon(string fuel) => fuel.ToLowerInvariant() switch
+    {
+        "electric" => "bi-lightning-charge text-success",
+        "hybrid" => "bi-recycle text-info",
+        "diesel" => "bi-droplet-fill text-secondary",
+        _ => "bi-fuel-pump text-warning"
+    };
+
+    // ----------------------------------------------------------- Add / Edit
+
+    private void OpenAddForm()
+    {
+        editingCar = new Car();
+        formError = null;
+        showForm = true;
+    }
+
+    private void OpenEditForm(Car car)
+    {
+        editingCar = car.Clone(); // edit a copy, so Cancel leaves the table unchanged
+        formError = null;
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        editingCar = null;
+    }
+
+    private async Task SaveCarAsync(Car car)
+    {
+        formError = null;
+
+        // Business rule: registration numbers must be unique.
+        if (CarService.IsRegistrationTaken(cars, car))
+        {
+            formError = $"A car with registration number {car.RegistrationNumber} already exists.";
+            return;
+        }
+
+        // Business rule: a car with an active booking must stay unavailable.
+        if (ActiveBookingFor(car.Id) is not null)
+        {
+            car.Available = false;
+        }
+
+        isSaving = true;
+        var isNew = car.Id == 0;
+        var result = isNew ? await CarService.CreateCarAsync(car) : await CarService.UpdateCarAsync(car);
+        isSaving = false;
+
+        if (!result.Success)
+        {
+            formError = result.ErrorMessage;
+            return;
+        }
+
+        CloseForm();
+        Toasts.ShowSuccess(isNew ? $"{car.Make} {car.Model} was added to the fleet." : $"{car.Make} {car.Model} was updated.");
+        AppState.NotifyDataChanged();
+        await LoadAsync();
+    }
+
+    // --------------------------------------------------------------- Delete
+
+    private void AskDelete(Car car)
+    {
+        pageError = null;
+
+        // Check the rule before showing the dialog, so staff get immediate feedback.
+        var blocking = bookings.FirstOrDefault(b => b.CarId == car.Id && BookingRules.IsCurrentOrUpcoming(b, DateTime.Now));
+        if (blocking is not null)
+        {
+            pageError = $"{car.DisplayName} cannot be deleted because it has an active or upcoming booking " +
+                        $"({blocking.StartDate:dd MMM} – {blocking.EndDate:dd MMM}). Delete the booking first.";
+            return;
+        }
+
+        carToDelete = car;
+    }
+
+    private async Task DeleteCarAsync()
+    {
+        if (carToDelete is null)
+        {
+            return;
+        }
+
+        // Server-side style check as well as hiding the button in the UI.
+        var user = (await AuthState).User;
+        if (!user.IsInRole(AuthService.AdminRole))
+        {
+            pageError = "Only administrators can delete cars.";
+            carToDelete = null;
+            return;
+        }
+
+        isDeleting = true;
+        var car = carToDelete;
+        var result = await CarService.DeleteCarAsync(car.Id);
+        isDeleting = false;
+        carToDelete = null;
+
+        if (!result.Success)
+        {
+            pageError = result.ErrorMessage; // includes the 409 Conflict message
+            Toasts.ShowError("The car could not be deleted.");
+            return;
+        }
+
+        Toasts.ShowSuccess($"{car.DisplayName} was deleted.");
+        AppState.NotifyDataChanged();
+        await LoadAsync();
+        if ((currentPage - 1) * PageSize >= FilteredCars.Count && currentPage > 1)
+        {
+            currentPage--;
+        }
+    }
+
+    // --------------------------------------------------------------- Export
+
+    private async Task ExportCsvAsync()
+    {
+        var lines = new List<string> { "Id,RegistrationNumber,Make,Model,Year,DailyRate,FuelType,Status" };
+        lines.AddRange(FilteredCars.Select(c =>
+            string.Join(",", c.Id, Csv(c.RegistrationNumber), Csv(c.Make), Csv(c.Model), c.Year,
+                c.DailyRate.ToString(System.Globalization.CultureInfo.InvariantCulture), Csv(c.FuelType),
+                ActiveBookingFor(c.Id) is not null ? "Booked" : c.Available ? "Available" : "Unavailable")));
+        await JS.InvokeVoidAsync("driveNow.downloadFile", $"drivenow-cars-{DateTime.Now:yyyyMMdd}.csv", string.Join("\n", lines));
+    }
+
+    private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+}
