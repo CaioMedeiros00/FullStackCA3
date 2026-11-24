@@ -1,0 +1,130 @@
+@page "/login"
+@layout EmptyLayout
+@inject AuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Login | DriveNow</PageTitle>
+
+<div class="login-page">
+    <div class="login-card card border-0 shadow-lg">
+        <div class="card-body p-4 p-sm-5">
+            <div class="text-center mb-4">
+                <span class="login-logo"><i class="bi bi-car-front-fill"></i></span>
+                <h1 class="h3 fw-bold mt-3 mb-1">DriveNow</h1>
+                <p class="text-body-secondary mb-0">Car Rental Management System</p>
+            </div>
+
+            @if (LoggedOut)
+            {
+                <AppAlert Type="AlertType.Success" Message="You have been logged out successfully." />
+            }
+            else if (!string.IsNullOrEmpty(ReturnUrl))
+            {
+                <AppAlert Type="AlertType.Info" Message="Please log in to continue." />
+            }
+
+            <AppAlert Type="AlertType.Danger" Message="@errorMessage" Dismissible="true" OnDismiss="() => errorMessage = null" />
+
+            <EditForm Model="model" OnValidSubmit="HandleLoginAsync" FormName="login" novalidate>
+                <DataAnnotationsValidator />
+
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <InputText id="username" class="form-control" @bind-Value="model.Username"
+                                   autocomplete="username" placeholder="Enter your username" />
+                    </div>
+                    <ValidationMessage For="() => model.Username" />
+                </div>
+
+                <div class="mb-4">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <InputText id="password" type="@(showPassword ? "text" : "password")" class="form-control"
+                                   @bind-Value="model.Password" autocomplete="current-password" placeholder="Enter your password" />
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPassword = !showPassword"
+                                aria-label="@(showPassword ? "Hide password" : "Show password")">
+                            <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                        </button>
+                    </div>
+                    <ValidationMessage For="() => model.Password" />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2" disabled="@isBusy">
+                    @if (isBusy)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
+                        <span>Login</span>
+                    }
+                </button>
+            </EditForm>
+
+            <div class="demo-accounts mt-4 small">
+                <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Demo accounts</div>
+                <div><code>admin</code> / <code>Admin123!</code> – Administrator (full access)</div>
+                <div><code>staff</code> / <code>Staff123!</code> – Staff (cannot delete cars)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly LoginModel model = new();
+    private string? errorMessage;
+    private bool isBusy;
+    private bool showPassword;
+
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public bool LoggedOut { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Already logged in? Skip the login page.
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+        }
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        try
+        {
+            var result = await AuthService.LoginAsync(model);
+            if (result.Success)
+            {
+                Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+                return;
+            }
+            errorMessage = result.ErrorMessage;
+            model.Password = string.Empty;
+        }
+        catch (Exception)
+        {
+            errorMessage = "Something went wrong while signing in. Please try again.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    /// <summary>Only allow redirects to pages inside this app (prevents open redirects).</summary>
+    private string SafeReturnUrl() =>
+        !string.IsNullOrWhiteSpace(ReturnUrl) &&
+        Uri.IsWellFormedUriString(ReturnUrl, UriKind.Relative) &&
+        !ReturnUrl.StartsWith("/") && !ReturnUrl.StartsWith("\\")
+            ? ReturnUrl
+            : string.Empty;
+}
