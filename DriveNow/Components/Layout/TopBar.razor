@@ -1,0 +1,63 @@
+@implements IDisposable
+@inject AuthService AuthService
+@inject ThemeService Theme
+@inject NavigationManager Navigation
+
+<header class="topbar">
+    <div class="text-body-secondary small d-none d-md-block">
+        <i class="bi bi-calendar3 me-1"></i>@DateTime.Now.ToString("dddd, dd MMMM yyyy")
+    </div>
+
+    <div class="d-flex align-items-center gap-2 ms-auto">
+        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="Theme.ToggleAsync"
+                title="@(Theme.IsDark ? "Switch to light mode" : "Switch to dark mode")"
+                aria-label="Toggle dark mode">
+            <i class="bi @(Theme.IsDark ? "bi-sun" : "bi-moon-stars")"></i>
+        </button>
+
+        <AuthorizeView Context="auth">
+            <div class="d-flex align-items-center gap-2">
+                <span class="avatar">@Initials(auth.User)</span>
+                <div class="lh-sm d-none d-sm-block">
+                    <div class="fw-semibold small">@auth.User.FindFirst(ClaimTypes.GivenName)?.Value</div>
+                    <span class="badge @(auth.User.IsInRole(AuthService.AdminRole) ? "text-bg-primary" : "text-bg-secondary")">
+                        @auth.User.FindFirst(ClaimTypes.Role)?.Value
+                    </span>
+                </div>
+            </div>
+        </AuthorizeView>
+
+        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="LogoutAsync">
+            <i class="bi bi-box-arrow-right"></i><span class="d-none d-sm-inline ms-1">Logout</span>
+        </button>
+    </div>
+</header>
+
+@code {
+    protected override void OnInitialized() => Theme.OnChange += HandleThemeChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Theme.InitializeAsync();
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login?loggedOut=true");
+    }
+
+    private static string Initials(ClaimsPrincipal user)
+    {
+        var name = user.FindFirst(ClaimTypes.GivenName)?.Value ?? user.Identity?.Name ?? "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+
+    private void HandleThemeChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Theme.OnChange -= HandleThemeChanged;
+}

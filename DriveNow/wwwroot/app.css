@@ -1,0 +1,364 @@
+/* ==========================================================================
+   DriveNow - custom styles on top of Bootstrap 5.3
+   ========================================================================== */
+
+:root {
+    --dn-sidebar-width: 250px;
+    --dn-sidebar-bg: #0f172a;
+    --dn-sidebar-bg-2: #1e293b;
+    --dn-sidebar-text: #cbd5e1;
+    --dn-accent: #2563eb;
+}
+
+body {
+    background-color: var(--bs-tertiary-bg);
+    min-height: 100vh;
+}
+
+h1:focus {
+    outline: none;
+}
+
+.min-w-0 {
+    min-width: 0;
+}
+
+/* ---------- App shell ---------- */
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.app-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.app-content {
+    flex: 1;
+    padding: 1.5rem;
+}
+
+.app-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+/* ---------- Sidebar / NavMenu ---------- */
+.sidebar {
+    width: var(--dn-sidebar-width);
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--dn-sidebar-bg), var(--dn-sidebar-bg-2));
+    color: var(--dn-sidebar-text);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-decoration: none;
+}
+
+.brand-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .6rem;
+    background: var(--dn-accent);
+}
+
+.sidebar-nav {
+    flex-direction: column;
+    padding: .75rem;
+    gap: .15rem;
+}
+
+.sidebar .nav-section {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #64748b;
+    padding: 1rem .75rem .35rem;
+}
+
+.sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    color: var(--dn-sidebar-text);
+    border-radius: .5rem;
+    padding: .6rem .75rem;
+    transition: background-color .15s ease, color .15s ease;
+}
+
+.sidebar .nav-link:hover {
+    background-color: rgba(255, 255, 255, .07);
+    color: #fff;
+}
+
+.sidebar .nav-link.active {
+    background-color: var(--dn-accent);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, .35);
+}
+
+@media (max-width: 991.98px) {
+    .app-shell {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        z-index: 1020;
+    }
+
+    .app-content {
+        padding: 1rem;
+    }
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .75rem 1.5rem;
+    background-color: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1010;
+}
+
+.avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+    font-weight: 600;
+    font-size: .85rem;
+}
+
+/* ---------- Cards ---------- */
+.card {
+    border-radius: .85rem;
+}
+
+.dashboard-card {
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--bs-box-shadow) !important;
+}
+
+.dashboard-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: .85rem;
+    font-size: 1.5rem;
+}
+
+.location-card {
+    transition: transform .15s ease;
+}
+
+.location-card:hover {
+    transform: translateY(-2px);
+}
+
+.location-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .75rem;
+    background-color: var(--bs-info-bg-subtle);
+    color: var(--bs-info-text-emphasis);
+    font-size: 1.25rem;
+}
+
+.location-map {
+    width: 100%;
+    height: 100%;
+    min-height: 320px;
+    border: 0;
+    display: block;
+}
+
+.location-details dt {
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    font-size: .85rem;
+}
+
+.location-details dd {
+    margin-bottom: 1rem;
+}
+
+/* ---------- Tables ---------- */
+.table > thead th {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-tertiary-bg);
+    white-space: nowrap;
+}
+
+.table > thead th .btn-link {
+    font-size: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    color: inherit !important;
+    vertical-align: baseline;
+}
+
+.status-badge {
+    font-weight: 500;
+}
+
+.vehicle-chip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+/* ---------- Empty state ---------- */
+.empty-state-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+    font-size: 2rem;
+}
+
+/* ---------- Forms ---------- */
+.validation-message {
+    color: var(--bs-form-invalid-color);
+    font-size: .85rem;
+    margin-top: .25rem;
+}
+
+.form-control.invalid,
+.form-select.invalid {
+    border-color: var(--bs-form-invalid-border-color);
+}
+
+.form-control.modified.valid,
+.form-select.modified.valid {
+    border-color: var(--bs-form-valid-border-color);
+}
+
+.cost-summary {
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+}
+
+/* ---------- Login ---------- */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: radial-gradient(circle at top left, #1d4ed8, #0f172a 60%);
+}
+
+.login-card {
+    width: 100%;
+    max-width: 440px;
+    border-radius: 1.25rem;
+}
+
+.login-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 1rem;
+    background-color: var(--dn-accent);
+    color: #fff;
+    font-size: 2rem;
+}
+
+.demo-accounts {
+    background-color: var(--bs-tertiary-bg);
+    border-radius: .75rem;
+    padding: .75rem 1rem;
+}
+
+/* ---------- Modal / toast ---------- */
+.modal-backdrop.show {
+    opacity: .5;
+}
+
+.toast-container {
+    z-index: 1090;
+}
+
+/* ---------- Blazor reconnect / error UI ---------- */
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, .2);
+    display: none;
+    left: 0;
+    padding: .6rem 1.25rem .7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+/* ---------- Print (Reports -> Save as PDF) ---------- */
+@media print {
+    .sidebar, .topbar, .app-footer, .page-header .btn, .toast-container {
+        display: none !important;
+    }
+
+    body {
+        background: #fff;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+    }
+}

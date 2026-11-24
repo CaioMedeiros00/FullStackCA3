@@ -1,0 +1,73 @@
+@implements IDisposable
+@inject AppState AppState
+@inject NavigationManager Navigation
+
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <a class="sidebar-brand" href="">
+            <span class="brand-icon"><i class="bi bi-car-front-fill"></i></span>
+            <span>DriveNow</span>
+        </a>
+        <button class="btn btn-sm btn-outline-light d-lg-none" type="button"
+                aria-label="Toggle navigation" aria-expanded="@(collapsed ? "false" : "true")" @onclick="ToggleMenu">
+            <i class="bi @(collapsed ? "bi-list" : "bi-x-lg")"></i>
+        </button>
+    </div>
+
+    <nav class="sidebar-nav @(collapsed ? "d-none d-lg-flex" : "d-flex")" aria-label="Main navigation">
+        <div class="nav-section">Overview</div>
+        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </NavLink>
+
+        <div class="nav-section">Management</div>
+        <NavLink class="nav-link" href="cars">
+            <i class="bi bi-car-front"></i> Cars
+        </NavLink>
+        <NavLink class="nav-link" href="bookings">
+            <i class="bi bi-calendar-check"></i> Bookings
+            @if (AppState.ActiveBookingCount is > 0)
+            {
+                <span class="badge rounded-pill text-bg-warning ms-auto" title="Active bookings">@AppState.ActiveBookingCount</span>
+            }
+        </NavLink>
+        <NavLink class="nav-link" href="locations">
+            <i class="bi bi-geo-alt"></i> Locations
+        </NavLink>
+
+        @* Role-based navigation: only administrators see this section. *@
+        <AuthorizeView Roles="@AuthService.AdminRole">
+            <div class="nav-section">Administration</div>
+            <NavLink class="nav-link" href="reports">
+                <i class="bi bi-bar-chart-line"></i> Reports
+            </NavLink>
+        </AuthorizeView>
+    </nav>
+</aside>
+
+@code {
+    private bool collapsed = true;
+
+    protected override void OnInitialized()
+    {
+        AppState.OnChange += HandleStateChanged;
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    private void ToggleMenu() => collapsed = !collapsed;
+
+    // Close the mobile menu after navigating.
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        collapsed = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleStateChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        AppState.OnChange -= HandleStateChanged;
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
+}

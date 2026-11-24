@@ -1,0 +1,15 @@
+## .NET / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userprefs
+*.rsuser
+.idea/
+.vscode/
+*.swp
+TestResults/
+publish/
+appsettings.Development.local.json
+.DS_Store

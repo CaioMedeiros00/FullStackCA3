@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+
+@*
+    Every page that uses this layout is protected: if the user is not logged in
+    they are redirected to the login page (with a returnUrl).
+*@
+<AuthorizeView>
+    <Authorized>
+        <div class="app-shell">
+            <NavMenu />
+            <div class="app-main">
+                <TopBar />
+                <main class="app-content">
+                    @Body
+                </main>
+                <footer class="app-footer text-body-secondary small">
+                    &copy; @DateTime.Now.Year DriveNow Car Rental Management System
+                </footer>
+            </div>
+        </div>
+        <ToastContainer />
+    </Authorized>
+    <NotAuthorized>
+        <RedirectToLogin />
+    </NotAuthorized>
+    <Authorizing>
+        <div class="vh-100 d-flex align-items-center justify-content-center">
+            <LoadingSpinner Message="Checking your session..." />
+        </div>
+    </Authorizing>
+</AuthorizeView>
