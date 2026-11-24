@@ -61,8 +61,8 @@ It is built with Razor components, Bootstrap 5 and a service layer (`CarService`
 
 | Username | Password | Role | Access |
 |----------|----------|------|--------|
-| `admin` | `Admin123!` | Admin | Everything, including deleting cars and the Reports page |
-| `staff` | `Staff123!` | Staff | Everything except deleting cars and Reports |
+| `admin` | `Admin123!` | Admin | Full access: add, edit and delete cars, manage bookings, view locations and the Reports page |
+| `staff` | `Staff123!` | Staff | View, search and filter cars, create and delete bookings, view locations. Cannot add, edit or delete cars, and cannot open Reports |
 
 ## Setup Instructions
 
