@@ -1,0 +1,102 @@
+@* Reusable Add/Edit car form. The parent owns the Car object and handles saving. *@
+<EditForm Model="Model" OnValidSubmit="HandleValidSubmitAsync" FormName="car-form">
+    <DataAnnotationsValidator />
+
+    @if (!string.IsNullOrWhiteSpace(ServerError))
+    {
+        <AppAlert Type="AlertType.Danger" Message="@ServerError" />
+    }
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="registration" class="form-label">Registration Number <span class="text-danger">*</span></label>
+            <InputText id="registration" class="form-control text-uppercase" @bind-Value="Model.RegistrationNumber"
+                       placeholder="e.g. 241-D-12345" maxlength="20" />
+            <ValidationMessage For="() => Model.RegistrationNumber" />
+        </div>
+        <div class="col-md-6">
+            <label for="fuelType" class="form-label">Fuel Type <span class="text-danger">*</span></label>
+            <InputSelect id="fuelType" class="form-select" @bind-Value="Model.FuelType">
+                <option value="">-- Select fuel type --</option>
+                @foreach (var fuel in FuelTypes)
+                {
+                    <option value="@fuel">@fuel</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => Model.FuelType" />
+        </div>
+        <div class="col-md-6">
+            <label for="make" class="form-label">Make <span class="text-danger">*</span></label>
+            <InputText id="make" class="form-control" @bind-Value="Model.Make" placeholder="e.g. Toyota" maxlength="50" />
+            <ValidationMessage For="() => Model.Make" />
+        </div>
+        <div class="col-md-6">
+            <label for="model" class="form-label">Model <span class="text-danger">*</span></label>
+            <InputText id="model" class="form-control" @bind-Value="Model.Model" placeholder="e.g. Corolla" maxlength="50" />
+            <ValidationMessage For="() => Model.Model" />
+        </div>
+        <div class="col-md-4">
+            <label for="year" class="form-label">Year <span class="text-danger">*</span></label>
+            <InputNumber id="year" class="form-control" @bind-Value="Model.Year" min="1990" max="2035" />
+            <ValidationMessage For="() => Model.Year" />
+        </div>
+        <div class="col-md-4">
+            <label for="dailyRate" class="form-label">Daily Rate (€) <span class="text-danger">*</span></label>
+            <div class="input-group">
+                <span class="input-group-text">€</span>
+                <InputNumber id="dailyRate" class="form-control" @bind-Value="Model.DailyRate" min="1" max="1000" step="0.01" />
+            </div>
+            <ValidationMessage For="() => Model.DailyRate" />
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check form-switch mb-2">
+                <InputCheckbox id="available" class="form-check-input" @bind-Value="Model.Available" disabled="@HasActiveBooking" />
+                <label class="form-check-label" for="available">Available for rent</label>
+            </div>
+        </div>
+        @if (HasActiveBooking)
+        {
+            <div class="col-12">
+                <div class="form-text text-warning-emphasis">
+                    <i class="bi bi-lock-fill me-1"></i>This car has an active booking, so it stays unavailable until the booking ends.
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+        <button type="button" class="btn btn-outline-secondary" disabled="@IsSaving" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <i class="bi bi-check-lg me-1"></i>
+                <span>@(IsEdit ? "Save Changes" : "Add Car")</span>
+            }
+        </button>
+    </div>
+</EditForm>
+
+@code {
+    public static readonly string[] FuelTypes = ["Petrol", "Diesel", "Hybrid", "Electric"];
+
+    [Parameter, EditorRequired] public Car Model { get; set; } = new();
+    [Parameter] public bool IsEdit { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public bool HasActiveBooking { get; set; }
+    [Parameter] public string? ServerError { get; set; }
+    [Parameter] public EventCallback<Car> OnValidSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleValidSubmitAsync()
+    {
+        Model.RegistrationNumber = Model.RegistrationNumber.Trim().ToUpperInvariant();
+        Model.Make = Model.Make.Trim();
+        Model.Model = Model.Model.Trim();
+        await OnValidSubmit.InvokeAsync(Model);
+    }
+}

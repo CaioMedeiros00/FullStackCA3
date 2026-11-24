@@ -1,0 +1,9 @@
+@* Reusable loading indicator. *@
+<div class="d-flex flex-column align-items-center justify-content-center py-5 text-body-secondary" role="status">
+    <div class="spinner-border text-primary mb-3" aria-hidden="true"></div>
+    <span>@Message</span>
+</div>
+
+@code {
+    [Parameter] public string Message { get; set; } = "Loading...";
+}

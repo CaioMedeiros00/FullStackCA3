@@ -1,0 +1,52 @@
+@* Reusable Bootstrap modal rendered by Blazor (no Bootstrap JS needed). *@
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="@titleId"
+         @onkeydown="HandleKeyDownAsync">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable @SizeClass">
+            <div class="modal-content shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="@titleId">
+                        @if (!string.IsNullOrEmpty(Icon))
+                        {
+                            <i class="bi @Icon me-2"></i>
+                        }
+                        @Title
+                    </h5>
+                    <button type="button" class="btn-close" aria-label="Close" disabled="@CloseDisabled" @onclick="OnClose"></button>
+                </div>
+                <div class="modal-body">
+                    @ChildContent
+                </div>
+                @if (Footer is not null)
+                {
+                    <div class="modal-footer">
+                        @Footer
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private readonly string titleId = $"modal-title-{Guid.NewGuid():N}";
+
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? SizeClass { get; set; }
+    [Parameter] public bool CloseDisabled { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && !CloseDisabled)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

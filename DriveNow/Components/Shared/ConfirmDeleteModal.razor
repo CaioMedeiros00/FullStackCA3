@@ -1,0 +1,38 @@
+@* Reusable delete confirmation, built on top of AppModal. *@
+<AppModal IsVisible="IsVisible" Title="@Title" Icon="bi-exclamation-triangle-fill text-danger"
+          CloseDisabled="IsProcessing" OnClose="OnCancel">
+    <ChildContent>
+        <p class="mb-2">@Message</p>
+        @if (!string.IsNullOrWhiteSpace(ItemName))
+        {
+            <p class="fw-semibold mb-2">@ItemName</p>
+        }
+        <p class="small text-body-secondary mb-0">This action cannot be undone.</p>
+    </ChildContent>
+    <Footer>
+        <button type="button" class="btn btn-outline-secondary" disabled="@IsProcessing" @onclick="OnCancel">Cancel</button>
+        <button type="button" class="btn btn-danger" disabled="@IsProcessing" @onclick="OnConfirm">
+            @if (IsProcessing)
+            {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                <span>Deleting...</span>
+            }
+            else
+            {
+                <i class="bi bi-trash me-1"></i>
+                <span>@ConfirmText</span>
+            }
+        </button>
+    </Footer>
+</AppModal>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm Delete";
+    [Parameter] public string Message { get; set; } = "Are you sure you want to delete this item?";
+    [Parameter] public string? ItemName { get; set; }
+    [Parameter] public string ConfirmText { get; set; } = "Delete";
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+}

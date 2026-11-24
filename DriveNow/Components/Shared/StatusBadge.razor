@@ -1,0 +1,14 @@
+@* Reusable coloured status pill (used for car availability and booking status). *@
+<span class="badge rounded-pill text-bg-@Color status-badge">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <i class="bi @Icon me-1"></i>
+    }
+    @Text
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+    [Parameter] public string Color { get; set; } = "secondary";
+    [Parameter] public string? Icon { get; set; }
+}

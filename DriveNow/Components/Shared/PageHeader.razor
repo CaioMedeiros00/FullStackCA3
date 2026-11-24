@@ -1,0 +1,27 @@
+@* Reusable page title row with optional action buttons on the right. *@
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">
+            @if (!string.IsNullOrEmpty(Icon))
+            {
+                <i class="bi @Icon text-primary me-2"></i>
+            }
+            @Title
+        </h1>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <p class="text-body-secondary mb-0">@Subtitle</p>
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="d-flex flex-wrap gap-2">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,28 @@
+@* Reusable search input. Use with @bind-Value="searchTerm". *@
+<div class="input-group search-box">
+    <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+    <input type="search" class="form-control" placeholder="@Placeholder" aria-label="@Placeholder"
+           value="@Value" @oninput="HandleInputAsync" />
+    @if (!string.IsNullOrEmpty(Value))
+    {
+        <button class="btn btn-outline-secondary" type="button" title="Clear search" @onclick="ClearAsync">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search...";
+
+    private Task HandleInputAsync(ChangeEventArgs e) => UpdateAsync(e.Value?.ToString() ?? string.Empty);
+
+    private Task ClearAsync() => UpdateAsync(string.Empty);
+
+    private async Task UpdateAsync(string value)
+    {
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+}

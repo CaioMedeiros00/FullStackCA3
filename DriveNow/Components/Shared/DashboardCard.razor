@@ -1,0 +1,37 @@
+@* Reusable statistic card for the dashboard. *@
+<div class="card dashboard-card h-100 border-0 shadow-sm">
+    <div class="card-body d-flex align-items-center gap-3">
+        <div class="dashboard-card-icon bg-@Color-subtle text-@Color-emphasis">
+            <i class="bi @Icon"></i>
+        </div>
+        <div class="flex-grow-1 min-w-0">
+            <div class="text-body-secondary small text-uppercase fw-semibold">@Title</div>
+            @if (IsLoading)
+            {
+                <div class="placeholder-glow my-1"><span class="placeholder col-5 placeholder-lg"></span></div>
+            }
+            else
+            {
+                <div class="fs-2 fw-bold lh-1 my-1">@Value</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <div class="small text-body-secondary text-truncate">@Subtitle</div>
+            }
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Href))
+    {
+        <a href="@Href" class="stretched-link" aria-label="View @Title"></a>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = "0";
+    [Parameter] public string Icon { get; set; } = "bi-bar-chart";
+    [Parameter] public string Color { get; set; } = "primary";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+}
