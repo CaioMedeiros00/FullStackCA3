@@ -1,0 +1,417 @@
+@page "/bookings"
+@attribute [Authorize]
+@inject BookingService BookingService
+@inject CarService CarService
+@inject LocationService LocationService
+@inject AppState AppState
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Bookings | DriveNow</PageTitle>
+
+<PageHeader Title="Bookings" Icon="bi-calendar-check" Subtitle="Create and manage customer bookings">
+    <button class="btn btn-outline-secondary" @onclick="ExportCsvAsync" disabled="@(isLoading || bookings.Count == 0)">
+        <i class="bi bi-download me-1"></i>Export CSV
+    </button>
+    <button class="btn btn-primary" @onclick="OpenForm" disabled="@(isLoading || cars.Count == 0)">
+        <i class="bi bi-calendar-plus me-1"></i>New Booking
+    </button>
+</PageHeader>
+
+<AppAlert Type="AlertType.Danger" Message="@pageError" Dismissible="true" OnDismiss="() => pageError = null" />
+
+@if (!isLoading && !loadFailed)
+{
+    @* Clearly show which vehicles are currently unavailable because of active bookings. *@
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0"><i class="bi bi-car-front me-2"></i>Vehicle availability</h2>
+            <span class="small text-body-secondary">@AvailableNowCount of @cars.Count available now</span>
+        </div>
+        <div class="card-body">
+            @if (cars.Count == 0)
+            {
+                <span class="text-body-secondary">No cars found. Add cars before creating bookings.</span>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var car in cars.OrderBy(c => c.Make))
+                    {
+                        var active = ActiveBookingFor(car.Id);
+                        var css = active is not null ? "border-warning bg-warning-subtle" : car.Available ? "border-success bg-success-subtle" : "border-secondary bg-secondary-subtle";
+                        <div class="vehicle-chip border rounded-3 px-2 py-1 small @css"
+                             title="@(active is not null ? $"Booked by {active.CustomerName} until {active.EndDate:dd MMM yyyy}" : car.Available ? "Available" : "Unavailable (out of service)")">
+                            <span class="fw-semibold">@car.Make @car.Model</span>
+                            <span class="text-body-secondary">@car.RegistrationNumber</span>
+                            @if (active is not null)
+                            {
+                                <span class="ms-1"><i class="bi bi-lock-fill"></i> until @active.EndDate.ToString("dd MMM")</span>
+                            }
+                            else if (!car.Available)
+                            {
+                                <span class="ms-1"><i class="bi bi-slash-circle"></i> out of service</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body border-bottom">
+        <div class="row g-2">
+            <div class="col-md-7">
+                <SearchBox Value="@AppState.BookingSearchTerm" ValueChanged="OnSearchChanged"
+                           Placeholder="Search by customer, car or registration..." />
+            </div>
+            <div class="col-md-5">
+                <select class="form-select" value="@AppState.BookingStatusFilter" @onchange="OnStatusFilterChanged" aria-label="Filter by status">
+                    <option value="">All statuses</option>
+                    @foreach (var status in Enum.GetValues<BookingStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <LoadingSpinner Message="Loading bookings..." />
+    }
+    else if (loadFailed)
+    {
+        <EmptyState Icon="bi-cloud-slash" Title="Bookings could not be loaded" Message="@loadError">
+            <button class="btn btn-primary" @onclick="LoadAsync"><i class="bi bi-arrow-repeat me-1"></i>Try again</button>
+        </EmptyState>
+    }
+    else if (bookings.Count == 0)
+    {
+        <EmptyState Icon="bi-calendar" Title="No bookings yet" Message="Create the first booking for a customer.">
+            <button class="btn btn-primary" @onclick="OpenForm" disabled="@(cars.Count == 0)">
+                <i class="bi bi-calendar-plus me-1"></i>New Booking
+            </button>
+        </EmptyState>
+    }
+    else if (FilteredBookings.Count == 0)
+    {
+        <EmptyState Icon="bi-search" Title="No matching bookings" Message="Try a different search or status filter." />
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Customer</th>
+                        <th>Car</th>
+                        <th class="d-none d-lg-table-cell">Pickup</th>
+                        <th>Dates</th>
+                        <th class="text-end d-none d-md-table-cell">Est. Cost</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var booking in PagedBookings)
+                    {
+                        var car = CarFor(booking.CarId);
+                        var status = BookingRules.GetStatus(booking, DateTime.Now);
+                        <tr @key="booking.Id">
+                            <td class="text-body-secondary">@booking.Id</td>
+                            <td class="fw-semibold">@booking.CustomerName</td>
+                            <td>
+                                @if (car is not null)
+                                {
+                                    <div>@car.Make @car.Model</div>
+                                    <div class="small text-body-secondary font-monospace">@car.RegistrationNumber</div>
+                                }
+                                else
+                                {
+                                    <span class="text-body-secondary">Car #@booking.CarId (not found)</span>
+                                }
+                            </td>
+                            <td class="d-none d-lg-table-cell small">@LocationName(booking.LocationId)</td>
+                            <td class="text-nowrap">
+                                @booking.StartDate.ToString("dd MMM yyyy") – @booking.EndDate.ToString("dd MMM yyyy")
+                                <div class="small text-body-secondary">@BookingRules.RentalDays(booking) day(s)</div>
+                            </td>
+                            <td class="text-end d-none d-md-table-cell">
+                                @(car is null ? "—" : BookingRules.EstimatedCost(booking, car).ToString("C", Euro))
+                            </td>
+                            <td>
+                                <StatusBadge Text="@status.ToString()" Color="@StatusColor(status)" Icon="@StatusIcon(status)" />
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger" title="Delete booking"
+                                        aria-label="Delete booking for @booking.CustomerName" @onclick="() => bookingToDelete = booking">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer bg-transparent">
+            <Pagination CurrentPage="currentPage" PageSize="PageSize" TotalItems="FilteredBookings.Count"
+                        OnPageChanged="page => currentPage = page" />
+            @if (FilteredBookings.Count <= PageSize)
+            {
+                <span class="small text-body-secondary">Showing @FilteredBookings.Count of @bookings.Count bookings</span>
+            }
+        </div>
+    }
+</div>
+
+<AppModal IsVisible="showForm" Title="New Booking" Icon="bi-calendar-plus" SizeClass="modal-lg"
+          CloseDisabled="isSaving" OnClose="CloseForm">
+    @if (newBooking is not null)
+    {
+        <BookingForm Model="newBooking" Cars="cars" ExistingBookings="bookings" Locations="locations" IsSaving="isSaving"
+                     ServerError="@formError" OnValidSubmit="CreateBookingAsync" OnCancel="CloseForm" />
+    }
+</AppModal>
+
+<ConfirmDeleteModal IsVisible="bookingToDelete is not null" Title="Delete Booking"
+                    Message="Are you sure you want to delete (cancel) this booking?"
+                    ItemName="@DeleteDescription" IsProcessing="isDeleting"
+                    OnConfirm="DeleteBookingAsync" OnCancel="() => bookingToDelete = null" />
+
+@code {
+    private const int PageSize = 10;
+    private static readonly System.Globalization.CultureInfo Euro = new("en-IE");
+
+    private List<Booking> bookings = [];
+    private List<Car> cars = [];
+    private List<Location> locations = [];
+    private bool isLoading = true;
+    private bool loadFailed;
+    private string? loadError;
+    private string? pageError;
+    private int currentPage = 1;
+
+    private bool showForm;
+    private bool isSaving;
+    private string? formError;
+    private Booking? newBooking;
+
+    private Booking? bookingToDelete;
+    private bool isDeleting;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        loadFailed = false;
+
+        // Three APIs used together: bookings, cars and locations (loaded in parallel).
+        var bookingsTask = BookingService.GetBookingsAsync();
+        var carsTask = CarService.GetCarsAsync();
+        var locationsTask = LocationService.GetLocationsAsync();
+        await Task.WhenAll(bookingsTask, carsTask, locationsTask);
+
+        var bookingsResult = await bookingsTask;
+        var carsResult = await carsTask;
+        var locationsResult = await locationsTask;
+        locations = locationsResult.Data ?? [];
+
+        if (!bookingsResult.Success)
+        {
+            loadFailed = true;
+            loadError = bookingsResult.ErrorMessage;
+        }
+        bookings = bookingsResult.Data ?? [];
+
+        if (carsResult.Success)
+        {
+            cars = carsResult.Data ?? [];
+        }
+        else
+        {
+            cars = [];
+            pageError = "Car details could not be loaded: " + carsResult.ErrorMessage;
+        }
+
+        if (bookingsResult.Success && carsResult.Success)
+        {
+            // Automatic availability: cars with an active booking are marked unavailable.
+            await BookingService.SyncCarAvailabilityAsync(cars, bookings);
+            AppState.SetActiveBookingCount(bookings.Count(b => BookingRules.IsActive(b, DateTime.Now)));
+        }
+
+        isLoading = false;
+    }
+
+    // ------------------------------------------------------------ Filtering
+
+    private List<Booking> FilteredBookings
+    {
+        get
+        {
+            var now = DateTime.Now;
+            IEnumerable<Booking> query = bookings;
+            var term = AppState.BookingSearchTerm.Trim();
+            if (term.Length > 0)
+            {
+                query = query.Where(b =>
+                    b.CustomerName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (CarFor(b.CarId) is { } car &&
+                     ($"{car.Make} {car.Model}".Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                      car.RegistrationNumber.Contains(term, StringComparison.OrdinalIgnoreCase))));
+            }
+            if (Enum.TryParse<BookingStatus>(AppState.BookingStatusFilter, out var status))
+            {
+                query = query.Where(b => BookingRules.GetStatus(b, now) == status);
+            }
+
+            // Active first, then upcoming, then completed (most recent first).
+            return query
+                .OrderBy(b => BookingRules.GetStatus(b, now) switch
+                {
+                    BookingStatus.Active => 0,
+                    BookingStatus.Upcoming => 1,
+                    _ => 2
+                })
+                .ThenBy(b => BookingRules.GetStatus(b, now) == BookingStatus.Completed ? -b.EndDate.Ticks : b.StartDate.Ticks)
+                .ToList();
+        }
+    }
+
+    private IEnumerable<Booking> PagedBookings => FilteredBookings.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    private void OnSearchChanged(string value)
+    {
+        AppState.BookingSearchTerm = value;
+        currentPage = 1;
+    }
+
+    private void OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        AppState.BookingStatusFilter = e.Value?.ToString() ?? string.Empty;
+        currentPage = 1;
+    }
+
+    private Car? CarFor(int carId) => cars.FirstOrDefault(c => c.Id == carId);
+
+    private string LocationName(int locationId) =>
+        locations.FirstOrDefault(l => l.Id == locationId)?.Name ?? (locationId > 0 ? $"Location #{locationId}" : "—");
+
+    private Booking? ActiveBookingFor(int carId) =>
+        bookings.FirstOrDefault(b => b.CarId == carId && BookingRules.IsActive(b, DateTime.Now));
+
+    private int AvailableNowCount => cars.Count(c => c.Available && ActiveBookingFor(c.Id) is null);
+
+    private string? DeleteDescription => bookingToDelete is null
+        ? null
+        : $"{bookingToDelete.CustomerName} · {CarFor(bookingToDelete.CarId)?.DisplayName ?? $"Car #{bookingToDelete.CarId}"} · " +
+          $"{bookingToDelete.StartDate:dd MMM} – {bookingToDelete.EndDate:dd MMM yyyy}";
+
+    private static string StatusColor(BookingStatus status) => status switch
+    {
+        BookingStatus.Active => "warning",
+        BookingStatus.Upcoming => "info",
+        _ => "secondary"
+    };
+
+    private static string StatusIcon(BookingStatus status) => status switch
+    {
+        BookingStatus.Active => "bi-play-circle",
+        BookingStatus.Upcoming => "bi-clock",
+        _ => "bi-check2-all"
+    };
+
+    // --------------------------------------------------------------- Create
+
+    private void OpenForm()
+    {
+        newBooking = new Booking();
+        formError = null;
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        newBooking = null;
+    }
+
+    private async Task CreateBookingAsync(Booking booking)
+    {
+        formError = null;
+        isSaving = true;
+        var result = await BookingService.CreateBookingAsync(booking);
+        isSaving = false;
+
+        if (!result.Success)
+        {
+            // 409 Conflict = overlapping booking; show it in the form so the user can change dates.
+            formError = result.ErrorMessage;
+            if (result.IsConflict)
+            {
+                Toasts.ShowWarning("Booking conflict: the car is not available for those dates.");
+            }
+            return;
+        }
+
+        CloseForm();
+        Toasts.ShowSuccess($"Booking created for {booking.CustomerName}.");
+        AppState.NotifyDataChanged();
+        await LoadAsync();
+    }
+
+    // --------------------------------------------------------------- Delete
+
+    private async Task DeleteBookingAsync()
+    {
+        if (bookingToDelete is null)
+        {
+            return;
+        }
+
+        isDeleting = true;
+        var booking = bookingToDelete;
+        var result = await BookingService.DeleteBookingAsync(booking);
+        isDeleting = false;
+        bookingToDelete = null;
+
+        if (!result.Success)
+        {
+            pageError = result.ErrorMessage;
+            Toasts.ShowError("The booking could not be deleted.");
+            return;
+        }
+
+        Toasts.ShowSuccess($"Booking for {booking.CustomerName} was deleted.");
+        AppState.NotifyDataChanged();
+        await LoadAsync();
+        if ((currentPage - 1) * PageSize >= FilteredBookings.Count && currentPage > 1)
+        {
+            currentPage--;
+        }
+    }
+
+    // --------------------------------------------------------------- Export
+
+    private async Task ExportCsvAsync()
+    {
+        var lines = new List<string> { "Id,Customer,Car,Registration,PickupLocation,StartDate,EndDate,Days,EstimatedCost,Status" };
+        lines.AddRange(FilteredBookings.Select(b =>
+        {
+            var car = CarFor(b.CarId);
+            return string.Join(",", b.Id, Csv(b.CustomerName), Csv(car is null ? $"Car #{b.CarId}" : $"{car.Make} {car.Model}"),
+                Csv(car?.RegistrationNumber ?? ""), Csv(LocationName(b.LocationId)), b.StartDate.ToString("yyyy-MM-dd"), b.EndDate.ToString("yyyy-MM-dd"),
+                BookingRules.RentalDays(b), BookingRules.EstimatedCost(b, car).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                BookingRules.GetStatus(b, DateTime.Now));
+        }));
+        await JS.InvokeVoidAsync("driveNow.downloadFile", $"drivenow-bookings-{DateTime.Now:yyyyMMdd}.csv", string.Join("\n", lines));
+    }
+
+    private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+}
