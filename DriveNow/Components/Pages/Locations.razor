@@ -1,0 +1,113 @@
+@page "/locations"
+@attribute [Authorize]
+@inject LocationService LocationService
+
+<PageTitle>Locations | DriveNow</PageTitle>
+
+<PageHeader Title="Locations" Icon="bi-geo-alt" Subtitle="DriveNow rental offices (read-only)">
+    <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@isLoading">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+    </button>
+</PageHeader>
+
+<div class="row g-2 mb-4">
+    <div class="col-md-6">
+        <SearchBox @bind-Value="searchTerm" Placeholder="Search by branch, town, county or phone..." />
+    </div>
+    @if (!isLoading && error is null)
+    {
+        <div class="col-md-6 d-flex align-items-center justify-content-md-end">
+            <span class="small text-body-secondary">@FilteredLocations.Count of @locations.Count locations</span>
+        </div>
+    }
+</div>
+
+@if (isLoading)
+{
+    <LoadingSpinner Message="Loading locations..." />
+}
+else if (error is not null)
+{
+    <EmptyState Icon="bi-cloud-slash" Title="Locations could not be loaded" Message="@error">
+        <button class="btn btn-primary" @onclick="LoadAsync"><i class="bi bi-arrow-repeat me-1"></i>Try again</button>
+    </EmptyState>
+}
+else if (locations.Count == 0)
+{
+    <EmptyState Icon="bi-geo" Title="No locations" Message="There are no rental offices to display." />
+}
+else if (FilteredLocations.Count == 0)
+{
+    <EmptyState Icon="bi-search" Title="No matching locations" Message="Nothing matches your search. Try another name, town or phone number.">
+        <button class="btn btn-outline-primary" @onclick="() => searchTerm = string.Empty">Clear search</button>
+    </EmptyState>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var location in FilteredLocations)
+        {
+            <div class="col-sm-6 col-xl-4" @key="location.Id">
+                <div class="card location-card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start gap-3">
+                            <span class="location-icon"><i class="bi bi-building"></i></span>
+                            <div class="min-w-0">
+                                <h2 class="h6 fw-semibold mb-2">@location.Name</h2>
+                                <p class="small text-body-secondary mb-1"><i class="bi bi-geo-alt me-1"></i>@location.DisplayAddress</p>
+                                @if (!string.IsNullOrWhiteSpace(location.Phone))
+                                {
+                                    <p class="small mb-0"><i class="bi bi-telephone me-1"></i><a href="tel:@location.Phone">@location.Phone</a></p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+                        <a href="locations/@location.Id" class="btn btn-sm btn-outline-primary w-100">
+                            View details <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Location> locations = [];
+    private string searchTerm = string.Empty;
+    private bool isLoading = true;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        error = null;
+        var result = await LocationService.GetLocationsAsync();
+        if (result.Success)
+        {
+            locations = result.Data ?? [];
+        }
+        else
+        {
+            error = result.ErrorMessage;
+        }
+        isLoading = false;
+    }
+
+    private List<Location> FilteredLocations
+    {
+        get
+        {
+            var term = searchTerm.Trim();
+            return locations
+                .Where(l => term.Length == 0 ||
+                            new[] { l.Name, l.Address, l.City, l.County, l.Phone }
+                                .Any(value => value.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(l => l.Name)
+                .ToList();
+        }
+    }
+}

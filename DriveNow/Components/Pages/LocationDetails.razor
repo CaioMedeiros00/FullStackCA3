@@ -1,0 +1,119 @@
+@page "/locations/{Id:int}"
+@attribute [Authorize]
+@inject LocationService LocationService
+
+<PageTitle>@(location?.Name ?? "Location") | DriveNow</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="locations">Locations</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@(location?.Name ?? $"Location #{Id}")</li>
+    </ol>
+</nav>
+
+@if (isLoading)
+{
+    <LoadingSpinner Message="Loading location details..." />
+}
+else if (location is null)
+{
+    <EmptyState Icon="@(notFound ? "bi-geo" : "bi-cloud-slash")"
+                Title="@(notFound ? "Location not found" : "Location could not be loaded")"
+                Message="@error">
+        <div class="d-flex justify-content-center gap-2">
+            @if (!notFound)
+            {
+                <button class="btn btn-primary" @onclick="LoadAsync"><i class="bi bi-arrow-repeat me-1"></i>Try again</button>
+            }
+            <a href="locations" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to locations</a>
+        </div>
+    </EmptyState>
+}
+else
+{
+    <PageHeader Title="@location.Name" Icon="bi-building" Subtitle="Rental office details">
+        <a href="locations" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </PageHeader>
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <dl class="mb-0 location-details">
+                        <dt><i class="bi bi-hash me-1"></i>Location ID</dt>
+                        <dd>@location.Id</dd>
+                        <dt><i class="bi bi-shop me-1"></i>Branch</dt>
+                        <dd>@location.Name</dd>
+                        @if (!string.IsNullOrWhiteSpace(location.Address))
+                        {
+                            <dt><i class="bi bi-geo-alt me-1"></i>Address</dt>
+                            <dd>@location.Address</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(location.City))
+                        {
+                            <dt><i class="bi bi-buildings me-1"></i>Town / City</dt>
+                            <dd>@location.City</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(location.County))
+                        {
+                            <dt><i class="bi bi-map me-1"></i>County</dt>
+                            <dd>@location.County</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(location.Phone))
+                        {
+                            <dt><i class="bi bi-telephone me-1"></i>Phone</dt>
+                            <dd><a href="tel:@location.Phone">@location.Phone</a></dd>
+                        }
+                    </dl>
+                </div>
+                <div class="card-footer bg-transparent d-flex flex-wrap gap-2">
+                    @if (!string.IsNullOrWhiteSpace(location.Phone))
+                    {
+                        <a class="btn btn-primary btn-sm" href="tel:@location.Phone"><i class="bi bi-telephone me-1"></i>Call office</a>
+                    }
+                    <a class="btn btn-outline-primary btn-sm" href="@MapsLink" target="_blank" rel="noopener noreferrer">
+                        <i class="bi bi-map me-1"></i>Open in Google Maps
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100 overflow-hidden">
+                <iframe class="location-map" title="Map of @location.Name" src="@MapEmbed" loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Location? location;
+    private bool isLoading = true;
+    private bool notFound;
+    private string? error;
+
+    // Search the map for "Branch, Address/City, Ireland".
+    private string MapQuery => Uri.EscapeDataString($"{location?.Name}, {location?.DisplayAddress}, Ireland");
+    private string MapsLink => $"https://www.google.com/maps/search/?api=1&query={MapQuery}";
+    private string MapEmbed => $"https://maps.google.com/maps?q={MapQuery}&output=embed";
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        error = null;
+        notFound = false;
+
+        var result = await LocationService.GetLocationAsync(Id);
+        location = result.Data;
+        if (!result.Success)
+        {
+            notFound = result.IsNotFound;
+            error = notFound ? $"There is no location with ID {Id}." : result.ErrorMessage;
+        }
+        isLoading = false;
+    }
+}
