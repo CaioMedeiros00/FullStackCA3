@@ -1,0 +1,218 @@
+@page "/"
+@attribute [Authorize]
+@implements IDisposable
+@inject CarService CarService
+@inject BookingService BookingService
+@inject LocationService LocationService
+@inject AppState AppState
+
+<PageTitle>Dashboard | DriveNow</PageTitle>
+
+<PageHeader Title="Dashboard" Icon="bi-speedometer2" Subtitle="@($"Fleet overview · last updated {lastUpdated:HH:mm:ss}")">
+    <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@isLoading">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+    </button>
+</PageHeader>
+
+@if (errors.Count > 0)
+{
+    <AppAlert Type="AlertType.Warning" Title="Some data could not be loaded">
+        <ul class="mb-2 ps-3">
+            @foreach (var error in errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+        <button class="btn btn-sm btn-warning" @onclick="LoadAsync"><i class="bi bi-arrow-repeat me-1"></i>Try again</button>
+    </AppAlert>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <DashboardCard Title="Total Cars" Value="@Display(cars?.Count)" Icon="bi-car-front-fill" Color="primary"
+                       Subtitle="Vehicles in the fleet" Href="cars" IsLoading="isLoading" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <DashboardCard Title="Available Cars" Value="@Display(availableCars)" Icon="bi-check-circle-fill" Color="success"
+                       Subtitle="@AvailabilitySubtitle" Href="cars" IsLoading="isLoading" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <DashboardCard Title="Active Bookings" Value="@Display(activeBookings?.Count)" Icon="bi-calendar-check-fill" Color="warning"
+                       Subtitle="@($"{upcomingCount} upcoming")" Href="bookings" IsLoading="isLoading" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <DashboardCard Title="Total Locations" Value="@Display(locations?.Count)" Icon="bi-geo-alt-fill" Color="info"
+                       Subtitle="Rental offices" Href="locations" IsLoading="isLoading" />
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0"><i class="bi bi-clock-history me-2"></i>Active &amp; upcoming bookings</h2>
+                <a href="bookings" class="small">View all</a>
+            </div>
+            <div class="card-body p-0">
+                @if (isLoading)
+                {
+                    <LoadingSpinner Message="Loading bookings..." />
+                }
+                else if (bookings is null)
+                {
+                    <EmptyState Icon="bi-cloud-slash" Title="Bookings unavailable" Message="The Bookings API could not be reached." />
+                }
+                else if (upcomingList.Count == 0)
+                {
+                    <EmptyState Icon="bi-calendar" Title="No active bookings" Message="There are no current or upcoming bookings." />
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var booking in upcomingList)
+                        {
+                            var status = BookingRules.GetStatus(booking, DateTime.Now);
+                            <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                <div class="min-w-0">
+                                    <div class="fw-semibold text-truncate">@booking.CustomerName</div>
+                                    <div class="small text-body-secondary text-truncate">
+                                        @CarName(booking.CarId) · @booking.StartDate.ToString("dd MMM") – @booking.EndDate.ToString("dd MMM yyyy")
+                                    </div>
+                                </div>
+                                <StatusBadge Text="@status.ToString()" Color="@(status == BookingStatus.Active ? "warning" : "info")" />
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent">
+                <h2 class="h6 mb-0"><i class="bi bi-fuel-pump me-2"></i>Fleet by fuel type</h2>
+            </div>
+            <div class="card-body">
+                @if (isLoading)
+                {
+                    <LoadingSpinner Message="Loading fleet..." />
+                }
+                else if (cars is null || cars.Count == 0)
+                {
+                    <EmptyState Icon="bi-car-front" Title="No cars" Message="Add cars to see the fleet breakdown." />
+                }
+                else
+                {
+                    foreach (var group in cars.GroupBy(c => c.FuelType).OrderByDescending(g => g.Count()))
+                    {
+                        var percent = group.Count() * 100.0 / cars.Count;
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>@group.Key</span>
+                                <span class="text-body-secondary">@group.Count() (@percent.ToString("0")%)</span>
+                            </div>
+                            <div class="progress" role="progressbar" aria-label="@group.Key" aria-valuenow="@percent.ToString("0")" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar" style="width: @percent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Car>? cars;
+    private List<Booking>? bookings;
+    private List<Booking>? activeBookings;
+    private List<Booking> upcomingList = [];
+    private List<Location>? locations;
+    private int? availableCars;
+    private int upcomingCount;
+    private readonly List<string> errors = [];
+    private bool isLoading = true;
+    private DateTime lastUpdated = DateTime.Now;
+
+    private string AvailabilitySubtitle => cars is null || availableCars is null
+        ? "Ready to rent"
+        : $"{cars.Count - availableCars} booked or unavailable";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Refresh automatically when another component changes cars/bookings.
+        AppState.OnChange += HandleAppStateChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errors.Clear();
+
+        // Call all three APIs in parallel.
+        var carsTask = CarService.GetCarsAsync();
+        var bookingsTask = BookingService.GetBookingsAsync();
+        var locationsTask = LocationService.GetLocationsAsync();
+        await Task.WhenAll(carsTask, bookingsTask, locationsTask);
+
+        var carsResult = await carsTask;
+        var bookingsResult = await bookingsTask;
+        var locationsResult = await locationsTask;
+
+        cars = carsResult.Data;
+        bookings = bookingsResult.Data;
+        locations = locationsResult.Data;
+
+        if (!carsResult.Success) errors.Add($"Cars: {carsResult.ErrorMessage}");
+        if (!bookingsResult.Success) errors.Add($"Bookings: {bookingsResult.ErrorMessage}");
+        if (!locationsResult.Success) errors.Add($"Locations: {locationsResult.ErrorMessage}");
+
+        var now = DateTime.Now;
+        if (bookings is not null)
+        {
+            activeBookings = bookings.Where(b => BookingRules.IsActive(b, now)).ToList();
+            upcomingCount = bookings.Count(b => BookingRules.GetStatus(b, now) == BookingStatus.Upcoming);
+            upcomingList = bookings.Where(b => BookingRules.IsCurrentOrUpcoming(b, now))
+                .OrderBy(b => b.StartDate).Take(6).ToList();
+
+            if (cars is not null)
+            {
+                await BookingService.SyncCarAvailabilityAsync(cars, bookings);
+            }
+            AppState.SetActiveBookingCount(activeBookings.Count);
+        }
+        else
+        {
+            activeBookings = null;
+            upcomingList = [];
+        }
+
+        // A car counts as available only if it is flagged available AND has no active booking.
+        availableCars = cars?.Count(c => c.Available && (activeBookings?.All(b => b.CarId != c.Id) ?? true));
+
+        lastUpdated = DateTime.Now;
+        isLoading = false;
+    }
+
+    private string CarName(int carId) =>
+        cars?.FirstOrDefault(c => c.Id == carId) is { } car ? $"{car.Make} {car.Model}" : $"Car #{carId}";
+
+    private static string Display(int? value) => value?.ToString() ?? "—";
+
+    private void HandleAppStateChanged()
+    {
+        // Only reload for real data changes (not for e.g. badge count updates we caused ourselves).
+        if (AppState.LastDataChange > lastUpdated)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    public void Dispose() => AppState.OnChange -= HandleAppStateChanged;
+}
